@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CS Web AI — Zero-Dependency 3D Engine</title>
 <style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#090d12;font-family:system-ui,sans-serif}#game{display:block;width:100%;height:100%;cursor:crosshair}.panel{position:fixed;left:18px;bottom:18px;color:#dce7ef;background:rgba(5,9,13,.68);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:10px 13px;backdrop-filter:blur(6px);font-size:12px;line-height:1.45;pointer-events:none}.panel b{display:block;font-size:11px;letter-spacing:.12em;margin-bottom:2px}.panel span{display:block;opacity:.78}.crosshair{position:fixed;inset:50% auto auto 50%;width:24px;height:24px;transform:translate(-50%,-50%);pointer-events:none}.crosshair i{position:absolute;background:#fff;box-shadow:0 0 3px #000}.crosshair i:nth-child(1){width:7px;height:2px;left:0;top:11px}.crosshair i:nth-child(2){width:7px;height:2px;right:0;top:11px}.crosshair i:nth-child(3){height:7px;width:2px;left:11px;top:0}.crosshair i:nth-child(4){height:7px;width:2px;left:11px;bottom:0}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#090d12;font-family:system-ui,sans-serif}#game{display:block;width:100%;height:100%;cursor:crosshair}#stats{position:fixed;left:12px;top:12px;color:#dce7ef;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;pointer-events:none;text-shadow:0 1px 2px #000}.crosshair{position:fixed;inset:50% auto auto 50%;width:24px;height:24px;transform:translate(-50%,-50%);pointer-events:none}.crosshair i{position:absolute;background:#fff;box-shadow:0 0 3px #000}.crosshair i:nth-child(1){width:7px;height:2px;left:0;top:11px}.crosshair i:nth-child(2){width:7px;height:2px;right:0;top:11px}.crosshair i:nth-child(3){height:7px;width:2px;left:11px;top:0}.crosshair i:nth-child(4){height:7px;width:2px;left:11px;bottom:0}
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
 <div id="hud">
 <div class="crosshair"><i></i><i></i><i></i><i></i></div>
-<div class="panel"><b>ZERO-DEPS 3D ENGINE</b><span>WASD move · Shift sprint · Space jump · Mouse look · Esc release mouse</span><span id="stats">WebGL2</span></div>
+<div id="stats">GoldSrc movement · WASD · Space · Mouse</div>
 </div>
 <script>
 (()=>{"use strict";
