@@ -37,9 +37,9 @@ const U={vp:gl.getUniformLocation(P,"uVP"),model:gl.getUniformLocation(P,"uModel
 function mesh(data){let vao=gl.createVertexArray();gl.bindVertexArray(vao);let b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data),gl.STATIC_DRAW);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,24,0);gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,3,gl.FLOAT,false,24,12);gl.bindVertexArray(null);return{vao,count:data.length/6}}
 function cube(){let p=[[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]],f=[[0,1,2,3,[0,0,-1]],[5,4,7,6,[0,0,1]],[4,0,3,7,[-1,0,0]],[1,5,6,2,[1,0,0]],[3,2,6,7,[0,1,0]],[4,5,1,0,[0,-1,0]]],a=[];for(let q of f){let[i0,i1,i2,i3,n]=q;for(let i of[i0,i1,i2,i0,i2,i3])a.push(...p[i],...n)}return mesh(a)}
 const CUBE=cube();
-class Entity{constructor(o={}){this.position=o.position||[0,0,0];this.scale=o.scale||[1,1,1];this.rotation=o.rotation||0;this.color=o.color||[1,1,1];this.visible=true}}
+class Entity{constructor(o={}){this.position=o.position||[0,0,0];this.scale=o.scale||[1,1,1];this.rotation=o.rotation||0;this.color=o.color||[1,1,1];this.visible=true;this.solid=o.solid!==false}}
 class Engine{
-constructor(){this.entities=[];this.camera={position:[0,1.7,6],yaw:0,pitch:0,velocity:[0,0,0],onGround:true};this.keys=new Set();this.jumpQueued=false;this.last=performance.now();this.accumulator=0;this.frames=0;this.tick=0}
+constructor(){this.entities=[];this.camera={position:[0,1.7,6],yaw:0,pitch:0,velocity:[0,0,0],onGround:true};this.keys=new Set();this.jumpQueued=false;this.last=performance.now();this.accumulator=0;this.frames=0;this.tick=0;this.playerRadius=.32;this.playerMinY=-1.55;this.playerMaxY=.35;this.worldLimit=17.2}
 add(e){this.entities.push(e);return e}
 start(){this.input();requestAnimationFrame(t=>this.loop(t))}
 input(){
@@ -68,6 +68,45 @@ if(speed<0.0001)return;
 const control=Math.max(speed,100),drop=control*4*dt,newspeed=Math.max(speed-drop,0),scale=newspeed/speed;
 v[0]*=scale;v[2]*=scale;
 }
+solidBounds(e){
+return{minX:e.position[0]-Math.abs(e.scale[0]),maxX:e.position[0]+Math.abs(e.scale[0]),minY:e.position[1]-Math.abs(e.scale[1]),maxY:e.position[1]+Math.abs(e.scale[1]),minZ:e.position[2]-Math.abs(e.scale[2]),maxZ:e.position[2]+Math.abs(e.scale[2])}
+}
+hullOverlaps(b){
+let c=this.camera,pyMin=c.position[1]+this.playerMinY,pyMax=c.position[1]+this.playerMaxY;
+if(pyMax<=b.minY||pyMin>=b.maxY)return false;
+let r=this.playerRadius;
+return c.position[0]+r>b.minX&&c.position[0]-r<b.maxX&&c.position[2]+r>b.minZ&&c.position[2]-r<b.maxZ;
+}
+collidesAt(x,z){
+let c=this.camera,oldX=c.position[0],oldZ=c.position[2];
+c.position[0]=x;c.position[2]=z;
+let hit=Math.abs(x)>this.worldLimit||Math.abs(z)>this.worldLimit;
+if(!hit)for(let e of this.entities)if(e.visible&&e.solid&&this.hullOverlaps(this.solidBounds(e))){hit=true;break}
+c.position[0]=oldX;c.position[2]=oldZ;
+return hit;
+}
+moveAxis(axis,delta){
+if(!delta)return;
+let c=this.camera,start=c.position[axis],target=start+delta;
+if(!this.collidesAt(axis==="x"?target:c.position[0],axis==="z"?target:c.position[2])){c.position[axis]=target;return}
+let lo=0,hi=1;
+for(let i=0;i<12;i++){let mid=(lo+hi)*.5,x=axis==="x"?start+delta*mid:c.position[0],z=axis==="z"?start+delta*mid:c.position[2];if(this.collidesAt(x,z))hi=mid;else lo=mid}
+c.position[axis]=start+delta*lo;
+this.camera.velocity[axis==="x"?0:2]=0;
+}
+resolveGround(){
+let c=this.camera;
+if(c.position[1]<=1.7){c.position[1]=1.7;if(c.velocity[1]<0)c.velocity[1]=0;c.onGround=true;return}
+c.onGround=false;
+}
+move(dt){
+let c=this.camera;
+this.moveAxis("x",c.velocity[0]*dt);
+this.moveAxis("z",c.velocity[2]*dt);
+c.position[1]+=c.velocity[1]*dt;
+if(c.position[1]<1.7){c.position[1]=1.7;if(c.velocity[1]<0)c.velocity[1]=0;c.onGround=true}
+else c.onGround=false;
+}
 update(dt){
 let c=this.camera,s=this.keys,f=[Math.sin(c.yaw),-Math.cos(c.yaw)],r=[Math.cos(c.yaw),Math.sin(c.yaw)],wish=[0,0];
 if(s.has("KeyW")){wish[0]+=f[0];wish[1]+=f[1]}if(s.has("KeyS")){wish[0]-=f[0];wish[1]-=f[1]}
@@ -80,8 +119,7 @@ if(c.onGround&&wishSpeed>0)this.accelerate(wish,wishSpeed,10,dt);
 }else if(wishSpeed>0)this.accelerate(wish,Math.min(wishSpeed,30),10,dt);
 this.jumpQueued=false;
 c.velocity[1]-=800*dt;
-c.position[0]+=c.velocity[0]*dt;c.position[1]+=c.velocity[1]*dt;c.position[2]+=c.velocity[2]*dt;
-if(c.position[1]<=1.7){c.position[1]=1.7;if(c.velocity[1]<0)c.velocity[1]=0;c.onGround=true}else c.onGround=false;
+this.move(dt);
 this.tick++;
 }
 render(){resize();gl.enable(gl.DEPTH_TEST);gl.clearColor(.035,.055,.075,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(P);let c=this.camera,d=[Math.cos(c.pitch)*Math.sin(c.yaw),Math.sin(c.pitch),-Math.cos(c.pitch)*Math.cos(c.yaw)],view=M.look(c.position,M.add(c.position,d),[0,1,0]),vp=M.mul(M.perspective(Math.PI/3,canvas.width/canvas.height,.05,300),view);gl.uniformMatrix4fv(U.vp,false,vp);gl.uniform3fv(U.light,new Float32Array([8,12,5]));gl.uniform3fv(U.camera,new Float32Array(c.position));for(let e of this.entities)if(e.visible){gl.uniformMatrix4fv(U.model,false,M.trs(e.position,e.scale,e.rotation));gl.uniform3fv(U.color,new Float32Array(e.color));gl.bindVertexArray(CUBE.vao);gl.drawArrays(gl.TRIANGLES,0,CUBE.count)}}}
