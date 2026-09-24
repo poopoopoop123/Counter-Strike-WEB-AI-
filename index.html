@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CS Web AI — Zero-Dependency 3D Engine</title>
 <style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#090d12;font-family:system-ui,sans-serif}#game{display:block;width:100%;height:100%;cursor:crosshair}#stats{position:fixed;left:12px;top:12px;color:#dce7ef;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;pointer-events:none;text-shadow:0 1px 2px #000}.crosshair{position:fixed;inset:50% auto auto 50%;width:24px;height:24px;transform:translate(-50%,-50%);pointer-events:none}.crosshair i{position:absolute;background:#fff;box-shadow:0 0 3px #000}.crosshair i:nth-child(1){width:7px;height:2px;left:0;top:11px}.crosshair i:nth-child(2){width:7px;height:2px;right:0;top:11px}.crosshair i:nth-child(3){height:7px;width:2px;left:11px;top:0}.crosshair i:nth-child(4){height:7px;width:2px;left:11px;bottom:0}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#090d12;font-family:system-ui,sans-serif}#game{display:block;width:100%;height:100%;cursor:crosshair}#stats{position:fixed;left:12px;top:12px;color:#dce7ef;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;pointer-events:none;text-shadow:0 1px 2px #000}#debug{display:none;position:fixed;left:12px;top:34px;margin:0;color:#b9c7d1;background:rgba(0,0,0,.68);padding:8px 10px;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;pointer-events:none;white-space:pre;text-shadow:0 1px 1px #000}body.debug-on #debug{display:block}.crosshair{position:fixed;inset:50% auto auto 50%;width:24px;height:24px;transform:translate(-50%,-50%);pointer-events:none}.crosshair i{position:absolute;background:#fff;box-shadow:0 0 3px #000}.crosshair i:nth-child(1){width:7px;height:2px;left:0;top:11px}.crosshair i:nth-child(2){width:7px;height:2px;right:0;top:11px}.crosshair i:nth-child(3){height:7px;width:2px;left:11px;top:0}.crosshair i:nth-child(4){height:7px;width:2px;left:11px;bottom:0}
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
 <div id="hud">
 <div class="crosshair"><i></i><i></i><i></i><i></i></div>
-<div id="stats">GoldSrc movement · WASD · Space · Mouse</div>
+<div id="stats">GoldSrc movement · WASD · Space · Mouse · F3 debug</div><pre id="debug"></pre>
 </div>
 <script>
 (()=>{"use strict";
@@ -38,23 +38,600 @@ function mesh(data){let vao=gl.createVertexArray();gl.bindVertexArray(vao);let b
 function cube(){let p=[[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]],f=[[0,1,2,3,[0,0,-1]],[5,4,7,6,[0,0,1]],[4,0,3,7,[-1,0,0]],[1,5,6,2,[1,0,0]],[3,2,6,7,[0,1,0]],[4,5,1,0,[0,-1,0]]],a=[];for(let q of f){let[i0,i1,i2,i3,n]=q;for(let i of[i0,i1,i2,i0,i2,i3])a.push(...p[i],...n)}return mesh(a)}
 const CUBE=cube();
 class Entity{constructor(o={}){this.position=o.position||[0,0,0];this.scale=o.scale||[1,1,1];this.rotation=o.rotation||0;this.color=o.color||[1,1,1];this.visible=true;this.solid=o.solid!==false}}
-class Engine{
-constructor(){this.entities=[];this.camera={position:[0,1.7,6],yaw:0,pitch:0,velocity:[0,0,0],onGround:true};this.keys=new Set();this.jumpQueued=false;this.last=performance.now();this.accumulator=0;this.frames=0;this.tick=0;this.playerRadius=.32;this.playerMinY=-1.55;this.playerMaxY=.35;this.worldLimit=17.2;this.movevars={gravity:800,stopspeed:100,maxspeed:320,accelerate:10,airaccelerate:10,friction:4,stepsize:.5}}
-add(e){this.entities.push(e);return e}
-start(){this.input();requestAnimationFrame(t=>this.loop(t))}
-input(){addEventListener("keydown",e=>{if(e.code==="Space"){if(!e.repeat)this.jumpQueued=true;e.preventDefault()}this.keys.add(e.code)});addEventListener("keyup",e=>this.keys.delete(e.code));canvas.addEventListener("click",()=>canvas.requestPointerLock());addEventListener("mousemove",e=>{if(document.pointerLockElement!==canvas)return;this.camera.yaw+=e.movementX*.0022;this.camera.pitch=Math.max(-1.5,Math.min(1.5,this.camera.pitch+e.movementY*.0022))})}
-loop(t){let frameDt=Math.min(.1,(t-this.last)/1000);this.last=t;this.accumulator+=frameDt;const fixed=.01;while(this.accumulator>=fixed){this.update(fixed);this.accumulator-=fixed}this.render();this.frames++;if(t-(this.ft||t)>1000){this.fps=this.frames;this.frames=0;this.ft=t;let v=this.camera.velocity;stats.textContent="GoldSrc · "+this.fps+" FPS · "+Math.hypot(v[0],v[2]).toFixed(1)+" ups · "+(this.camera.onGround?"ground":"air")}requestAnimationFrame(x=>this.loop(x))}
-accelerate(wishDir,wishSpeed,accel,dt){let v=this.camera.velocity,current=v[0]*wishDir[0]+v[2]*wishDir[1],addspeed=wishSpeed-current;if(addspeed<=0)return;let accelspeed=accel*dt*wishSpeed;if(accelspeed>addspeed)accelspeed=addspeed;v[0]+=wishDir[0]*accelspeed;v[2]+=wishDir[1]*accelspeed}
-friction(dt){let v=this.camera.velocity,speed=Math.hypot(v[0],v[2]);if(speed<1){v[0]=0;v[2]=0;return}let control=Math.max(speed,this.movevars.stopspeed),drop=control*this.movevars.friction*dt,newspeed=Math.max(speed-drop,0)/speed;v[0]*=newspeed;v[2]*=newspeed}
-solidBounds(e){return{minX:e.position[0]-Math.abs(e.scale[0]),maxX:e.position[0]+Math.abs(e.scale[0]),minY:e.position[1]-Math.abs(e.scale[1]),maxY:e.position[1]+Math.abs(e.scale[1]),minZ:e.position[2]-Math.abs(e.scale[2]),maxZ:e.position[2]+Math.abs(e.scale[2])}}
-hullOverlaps(b,x=this.camera.position[0],y=this.camera.position[1],z=this.camera.position[2]){let pyMin=y+this.playerMinY,pyMax=y+this.playerMaxY;if(pyMax<=b.minY||pyMin>=b.maxY)return false;let r=this.playerRadius;return x+r>b.minX&&x-r<b.maxX&&z+r>b.minZ&&z-r<b.maxZ}
-collidesAt(x,y,z){let hit=Math.abs(x)>this.worldLimit||Math.abs(z)>this.worldLimit;if(hit)return true;for(let e of this.entities)if(e.visible&&e.solid&&this.hullOverlaps(this.solidBounds(e),x,y,z))return true;return false}
-clipVelocity(v,n){let backoff=v[0]*n[0]+v[1]*n[1]+v[2]*n[2];if(backoff<0){backoff*=1.0;v=[v[0]-n[0]*backoff,v[1]-n[1]*backoff,v[2]-n[2]*backoff]}return v}
-traceMove(axis,delta){let c=this.camera;if(!delta)return;let start=c.position[axis==="x"?0:2],otherX=c.position[0],otherZ=c.position[2],target=start+delta;if(!this.collidesAt(axis==="x"?target:otherX,c.position[1],axis==="z"?target:otherZ)){c.position[axis==="x"?0:2]=target;return}let lo=0,hi=1;for(let i=0;i<14;i++){let m=(lo+hi)*.5,x=axis==="x"?start+delta*m:otherX,z=axis==="z"?start+delta*m:otherZ;if(this.collidesAt(x,c.position[1],z))hi=m;else lo=m}c.position[axis==="x"?0:2]=start+delta*lo;let n=axis==="x"?[delta>0?-1:1,0,0]:[0,0,delta>0?-1:1];c.velocity=this.clipVelocity(c.velocity,n)}
-slideMove(dt){let c=this.camera;for(let bump=0;bump<4;bump++){let vx=c.velocity[0]*dt,vz=c.velocity[2]*dt;if(Math.abs(vx)+Math.abs(vz)<1e-6)break;let ox=c.position[0],oz=c.position[2];this.traceMove("x",vx);this.traceMove("z",vz);if(c.position[0]===ox&&c.position[2]===oz)break}}
-update(dt){let c=this.camera,s=this.keys,f=[Math.sin(c.yaw),-Math.cos(c.yaw)],r=[Math.cos(c.yaw),Math.sin(c.yaw)],wish=[0,0];if(s.has("KeyW")){wish[0]+=f[0];wish[1]+=f[1]}if(s.has("KeyS")){wish[0]-=f[0];wish[1]-=f[1]}if(s.has("KeyD")){wish[0]+=r[0];wish[1]+=r[1]}if(s.has("KeyA")){wish[0]-=r[0];wish[1]-=r[1]}let len=Math.hypot(wish[0],wish[1]),wishSpeed=0;if(len>0){wish[0]/=len;wish[1]/=len;wishSpeed=Math.min(this.movevars.maxspeed,320)}if(c.onGround){if(this.jumpQueued){c.velocity[1]=270;c.onGround=false}else this.friction(dt);if(c.onGround&&wishSpeed>0)this.accelerate(wish,wishSpeed,this.movevars.accelerate,dt)}else if(wishSpeed>0)this.accelerate(wish,Math.min(wishSpeed,30),this.movevars.airaccelerate,dt);this.jumpQueued=false;c.velocity[1]-=this.movevars.gravity*dt;c.position[1]+=c.velocity[1]*dt;if(c.position[1]<=1.7){c.position[1]=1.7;if(c.velocity[1]<0)c.velocity[1]=0;c.onGround=true}else c.onGround=false;this.slideMove(dt);this.tick++}
-render(){resize();gl.enable(gl.DEPTH_TEST);gl.clearColor(.035,.055,.075,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(P);let c=this.camera,d=[Math.cos(c.pitch)*Math.sin(c.yaw),Math.sin(c.pitch),-Math.cos(c.pitch)*Math.cos(c.yaw)],view=M.look(c.position,M.add(c.position,d),[0,1,0]),vp=M.mul(M.perspective(Math.PI/3,canvas.width/canvas.height,.05,300),view);gl.uniformMatrix4fv(U.vp,false,vp);gl.uniform3fv(U.light,new Float32Array([8,12,5]));gl.uniform3fv(U.camera,new Float32Array(c.position));for(let e of this.entities)if(e.visible){gl.uniformMatrix4fv(U.model,false,M.trs(e.position,e.scale,e.rotation));gl.uniform3fv(U.color,new Float32Array(e.color));gl.bindVertexArray(CUBE.vao);gl.drawArrays(gl.TRIANGLES,0,CUBE.count)}}}
-function resize(){let d=devicePixelRatio||1,w=Math.floor(innerWidth*d),h=Math.floor(innerHeight*d);if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h)}}
+
+class Engine {
+  // Player state. Position is in render-world units; velocity is GoldSrc ups.
+  constructor() {
+    this.entities = [];
+    this.camera = {
+      position: [0, 1.75, 6],
+      yaw: 0,
+      pitch: 0,
+      velocity: [0, 0, 0],
+      onGround: true
+    };
+
+    this.keys = new Set();
+    this.jumpQueued = false;
+    this.debugEnabled = false;
+
+    this.last = performance.now();
+    this.accumulator = 0;
+    this.frames = 0;
+    this.fps = 0;
+    this.ft = 0;
+    this.tick = 0;
+
+    // GoldSrc uses 16 world units for roughly one engine render unit here.
+    this.unitsPerWorldUnit = 16;
+
+    // Normal HL1 player hull: 16x16 radius and -36..36 vertical.
+    this.playerRadius = 16 / this.unitsPerWorldUnit;
+    this.playerMinY = -36 / this.unitsPerWorldUnit;
+    this.playerMaxY = 36 / this.unitsPerWorldUnit;
+
+    this.worldLimit = 17.2;
+
+    this.movevars = {
+      gravity: 800,
+      stopspeed: 100,
+      maxspeed: 320,
+      accelerate: 10,
+      airaccelerate: 10,
+      friction: 4,
+      stepsize: 18
+    };
+
+    this.command = { forward: 0, side: 0 };
+    this.wish = {
+      direction: [0, 0],
+      velocity: [0, 0],
+      speed: 0,
+      position: [0, 0, 0]
+    };
+
+    this.lastCollision = "none";
+  }
+
+  add(entity) {
+    this.entities.push(entity);
+    return entity;
+  }
+
+  start() {
+    this.setupInput();
+    requestAnimationFrame((time) => this.loop(time));
+  }
+
+  // -------------------------------------------------------------------------
+  // Input
+  // -------------------------------------------------------------------------
+  setupInput() {
+    addEventListener("keydown", (event) => {
+      if (event.code === "F3" && !event.repeat) {
+        this.debugEnabled = !this.debugEnabled;
+        document.body.classList.toggle("debug-on", this.debugEnabled);
+        event.preventDefault();
+        return;
+      }
+
+      if (event.code === "Space") {
+        if (!event.repeat) this.jumpQueued = true;
+        event.preventDefault();
+      }
+
+      this.keys.add(event.code);
+    });
+
+    addEventListener("keyup", (event) => {
+      this.keys.delete(event.code);
+    });
+
+    canvas.addEventListener("click", () => canvas.requestPointerLock());
+
+    addEventListener("mousemove", (event) => {
+      if (document.pointerLockElement !== canvas) return;
+
+      this.camera.yaw += event.movementX * 0.0022;
+      this.camera.pitch = Math.max(
+        -1.5,
+        Math.min(1.5, this.camera.pitch + event.movementY * 0.0022)
+      );
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Main loop
+  // -------------------------------------------------------------------------
+  loop(time) {
+    const frameDt = Math.min(0.1, (time - this.last) / 1000);
+    this.last = time;
+    this.accumulator += frameDt;
+
+    const fixedDt = 0.01;
+
+    while (this.accumulator >= fixedDt) {
+      this.update(fixedDt);
+      this.accumulator -= fixedDt;
+    }
+
+    this.render();
+    this.frames++;
+
+    if (time - (this.ft || time) > 1000) {
+      this.fps = this.frames;
+      this.frames = 0;
+      this.ft = time;
+    }
+
+    this.updateHud();
+    requestAnimationFrame((nextTime) => this.loop(nextTime));
+  }
+
+  // -------------------------------------------------------------------------
+  // GoldSrc-style command input.
+  // -------------------------------------------------------------------------
+  buildCommand() {
+    let forward = 0;
+    let side = 0;
+
+    if (this.keys.has("KeyW")) forward += 400;
+    if (this.keys.has("KeyS")) forward -= 400;
+    if (this.keys.has("KeyD")) side += 400;
+    if (this.keys.has("KeyA")) side -= 400;
+
+    this.command.forward = forward;
+    this.command.side = side;
+
+    return { forward, side };
+  }
+
+  getWishMove(forwardMove, sideMove) {
+    const yaw = this.camera.yaw;
+
+    const forward = [Math.sin(yaw), -Math.cos(yaw)];
+    const right = [Math.cos(yaw), Math.sin(yaw)];
+
+    const wishVelocity = [
+      forward[0] * forwardMove + right[0] * sideMove,
+      forward[1] * forwardMove + right[1] * sideMove
+    ];
+
+    const length = Math.hypot(wishVelocity[0], wishVelocity[1]);
+
+    if (length < 0.000001) {
+      return {
+        direction: [0, 0],
+        speed: 0,
+        velocity: [0, 0]
+      };
+    }
+
+    const direction = [
+      wishVelocity[0] / length,
+      wishVelocity[1] / length
+    ];
+
+    // PM_CmdScale behavior: diagonal input must not exceed maxspeed.
+    const maxCommand = Math.max(
+      Math.abs(forwardMove),
+      Math.abs(sideMove)
+    );
+
+    const speed = Math.min(this.movevars.maxspeed, maxCommand);
+
+    return {
+      direction,
+      speed,
+      velocity: [
+        direction[0] * speed,
+        direction[1] * speed
+      ]
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // PM_Friction / PM_Accelerate.
+  // -------------------------------------------------------------------------
+  applyFriction(dt) {
+    const velocity = this.camera.velocity;
+    const speed = Math.hypot(velocity[0], velocity[2]);
+
+    if (speed < 1) {
+      velocity[0] = 0;
+      velocity[2] = 0;
+      return;
+    }
+
+    const control = Math.max(speed, this.movevars.stopspeed);
+    const drop = control * this.movevars.friction * dt;
+    const scale = Math.max(speed - drop, 0) / speed;
+
+    velocity[0] *= scale;
+    velocity[2] *= scale;
+  }
+
+  accelerate(wishDirection, wishSpeed, acceleration, dt) {
+    const velocity = this.camera.velocity;
+
+    const currentSpeed =
+      velocity[0] * wishDirection[0] +
+      velocity[2] * wishDirection[1];
+
+    const addSpeed = wishSpeed - currentSpeed;
+
+    if (addSpeed <= 0) return;
+
+    let accelerationSpeed = acceleration * dt * wishSpeed;
+    accelerationSpeed = Math.min(accelerationSpeed, addSpeed);
+
+    velocity[0] += wishDirection[0] * accelerationSpeed;
+    velocity[2] += wishDirection[1] * accelerationSpeed;
+  }
+
+  // -------------------------------------------------------------------------
+  // Collision.
+  // -------------------------------------------------------------------------
+  getSolidBounds(entity) {
+    return {
+      minX: entity.position[0] - Math.abs(entity.scale[0]),
+      maxX: entity.position[0] + Math.abs(entity.scale[0]),
+      minY: entity.position[1] - Math.abs(entity.scale[1]),
+      maxY: entity.position[1] + Math.abs(entity.scale[1]),
+      minZ: entity.position[2] - Math.abs(entity.scale[2]),
+      maxZ: entity.position[2] + Math.abs(entity.scale[2])
+    };
+  }
+
+  hullOverlaps(bounds, x, y, z) {
+    const minY = y + this.playerMinY;
+    const maxY = y + this.playerMaxY;
+
+    if (maxY <= bounds.minY || minY >= bounds.maxY) return false;
+
+    const radius = this.playerRadius;
+
+    return (
+      x + radius > bounds.minX &&
+      x - radius < bounds.maxX &&
+      z + radius > bounds.minZ &&
+      z - radius < bounds.maxZ
+    );
+  }
+
+  collidesAt(x, y, z) {
+    if (Math.abs(x) > this.worldLimit || Math.abs(z) > this.worldLimit) {
+      return true;
+    }
+
+    for (const entity of this.entities) {
+      if (!entity.visible || !entity.solid) continue;
+
+      if (this.hullOverlaps(this.getSolidBounds(entity), x, y, z)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  traceAxis(axis, distance) {
+    if (Math.abs(distance) < 0.000001) {
+      return { fraction: 1, normal: [0, 0, 0] };
+    }
+
+    const position = this.camera.position;
+    const index = axis === "x" ? 0 : axis === "y" ? 1 : 2;
+    const start = position[index];
+
+    const collides = (fraction) => {
+      const next = [...position];
+      next[index] = start + distance * fraction;
+      return this.collidesAt(next[0], next[1], next[2]);
+    };
+
+    if (!collides(1)) {
+      position[index] = start + distance;
+      return { fraction: 1, normal: [0, 0, 0] };
+    }
+
+    let low = 0;
+    let high = 1;
+
+    for (let i = 0; i < 18; i++) {
+      const middle = (low + high) * 0.5;
+
+      if (collides(middle)) {
+        high = middle;
+      } else {
+        low = middle;
+      }
+    }
+
+    position[index] = start + distance * low;
+
+    const normal = [0, 0, 0];
+    normal[index] = distance > 0 ? -1 : 1;
+
+    return { fraction: low, normal };
+  }
+
+  clipVelocity(velocity, normal) {
+    const backoff =
+      velocity[0] * normal[0] +
+      velocity[1] * normal[1] +
+      velocity[2] * normal[2];
+
+    if (backoff >= 0) return [...velocity];
+
+    return [
+      velocity[0] - normal[0] * backoff,
+      velocity[1] - normal[1] * backoff,
+      velocity[2] - normal[2] * backoff
+    ];
+  }
+
+  // PM_FlyMove-style four-bump slide. Velocity is GoldSrc units; movement
+  // distance is converted to the render world's scale at the boundary.
+  slideMove(dt) {
+    const player = this.camera;
+    const primalVelocity = [...player.velocity];
+    let timeLeft = dt;
+    const planes = [];
+
+    for (let bump = 0; bump < 4 && timeLeft > 0.000001; bump++) {
+      const delta = [
+        player.velocity[0] * timeLeft / this.unitsPerWorldUnit,
+        player.velocity[1] * timeLeft / this.unitsPerWorldUnit,
+        player.velocity[2] * timeLeft / this.unitsPerWorldUnit
+      ];
+
+      if (Math.hypot(...delta) < 0.000001) break;
+
+      let bestFraction = 1;
+      let bestNormal = [0, 0, 0];
+
+      for (const axis of ["x", "y", "z"]) {
+        const saved = [...player.position];
+        const index = axis === "x" ? 0 : axis === "y" ? 1 : 2;
+
+        const trace = this.traceAxis(axis, delta[index]);
+
+        player.position[0] = saved[0];
+        player.position[1] = saved[1];
+        player.position[2] = saved[2];
+
+        if (trace.fraction < bestFraction) {
+          bestFraction = trace.fraction;
+          bestNormal = trace.normal;
+        }
+      }
+
+      if (bestFraction >= 1) {
+        player.position[0] += delta[0];
+        player.position[1] += delta[1];
+        player.position[2] += delta[2];
+        break;
+      }
+
+      player.position[0] += delta[0] * bestFraction;
+      player.position[1] += delta[1] * bestFraction;
+      player.position[2] += delta[2] * bestFraction;
+
+      timeLeft *= 1 - bestFraction;
+      planes.push(bestNormal);
+
+      this.lastCollision =
+        "normal " + bestNormal.map((value) => value.toFixed(0)).join(",");
+
+      let newVelocity = [...primalVelocity];
+
+      for (const plane of planes) {
+        const clipped = this.clipVelocity(primalVelocity, plane);
+        let valid = true;
+
+        for (const other of planes) {
+          if (other === plane) continue;
+
+          if (
+            clipped[0] * other[0] +
+              clipped[1] * other[1] +
+              clipped[2] * other[2] <
+            -0.001
+          ) {
+            valid = false;
+            break;
+          }
+        }
+
+        if (valid) {
+          newVelocity = clipped;
+          break;
+        }
+      }
+
+      if (
+        newVelocity[0] * primalVelocity[0] +
+          newVelocity[1] * primalVelocity[1] +
+          newVelocity[2] * primalVelocity[2] <=
+        0
+      ) {
+        player.velocity = [0, 0, 0];
+        break;
+      }
+
+      player.velocity = newVelocity;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Player movement.
+  // -------------------------------------------------------------------------
+  update(dt) {
+    const player = this.camera;
+    const command = this.buildCommand();
+    const wish = this.getWishMove(command.forward, command.side);
+
+    this.wish.direction = wish.direction;
+    this.wish.velocity = wish.velocity;
+    this.wish.speed = wish.speed;
+
+    this.wish.position = [
+      player.position[0] +
+        wish.velocity[0] * dt / this.unitsPerWorldUnit,
+      player.position[1],
+      player.position[2] +
+        wish.velocity[1] * dt / this.unitsPerWorldUnit
+    ];
+
+    if (player.onGround && this.jumpQueued) {
+      player.velocity[1] = 270;
+      player.onGround = false;
+      this.jumpQueued = false;
+    }
+
+    if (player.onGround) {
+      this.applyFriction(dt);
+
+      if (wish.speed > 0) {
+        this.accelerate(
+          wish.direction,
+          wish.speed,
+          this.movevars.accelerate,
+          dt
+        );
+      }
+    } else if (wish.speed > 0) {
+      this.accelerate(
+        wish.direction,
+        Math.min(wish.speed, 30),
+        this.movevars.airaccelerate,
+        dt
+      );
+    }
+
+    player.velocity[1] -= this.movevars.gravity * dt;
+
+    this.slideMove(dt);
+
+    // Camera is the eye position: 28 GoldSrc units above the player origin.
+    const floorY = 28 / this.unitsPerWorldUnit;
+
+    if (player.position[1] <= floorY) {
+      player.position[1] = floorY;
+
+      if (player.velocity[1] < 0) {
+        player.velocity[1] = 0;
+      }
+
+      player.onGround = true;
+    } else {
+      player.onGround = false;
+    }
+
+    this.tick++;
+  }
+
+  // -------------------------------------------------------------------------
+  // Debug HUD.
+  // -------------------------------------------------------------------------
+  updateHud() {
+    const velocity = this.camera.velocity;
+    const speed2D = Math.hypot(velocity[0], velocity[2]);
+
+    stats.textContent =
+      "GoldSrc · " +
+      this.fps +
+      " FPS · " +
+      speed2D.toFixed(1) +
+      " ups · " +
+      (this.camera.onGround ? "ground" : "air");
+
+    if (!this.debugEnabled) return;
+
+    debug.textContent = [
+      "MOVEMENT DEBUG",
+      "------------------------------",
+      "tick:       " + this.tick,
+      "input:      F " + this.command.forward + "  S " + this.command.side,
+      "",
+      "position:   " +
+        this.camera.position.map((v) => v.toFixed(3)).join(", "),
+      "wish pos:   " +
+        this.wish.position.map((v) => v.toFixed(3)).join(", "),
+      "velocity:   " +
+        velocity.map((v) => v.toFixed(3)).join(", "),
+      "speed 2D:   " + speed2D.toFixed(3) + " ups",
+      "speed 3D:   " + Math.hypot(...velocity).toFixed(3) + " ups",
+      "",
+      "wish dir:   " +
+        this.wish.direction.map((v) => v.toFixed(4)).join(", "),
+      "wish vel:   " +
+        this.wish.velocity.map((v) => v.toFixed(3)).join(", "),
+      "wish speed: " + this.wish.speed.toFixed(3) + " ups",
+      "",
+      "ground:     " + this.camera.onGround,
+      "yaw:        " + this.camera.yaw.toFixed(4),
+      "pitch:      " + this.camera.pitch.toFixed(4),
+      "collision:  " + this.lastCollision,
+      "",
+      "F3 toggles this debugger."
+    ].join("\\n");
+  }
+
+  // -------------------------------------------------------------------------
+  // Rendering.
+  // -------------------------------------------------------------------------
+  render() {
+    resize();
+
+    gl.enable(gl.DEPTH_TEST);
+    gl.clearColor(0.035, 0.055, 0.075, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.useProgram(P);
+
+    const player = this.camera;
+    const direction = [
+      Math.cos(player.pitch) * Math.sin(player.yaw),
+      Math.sin(player.pitch),
+      -Math.cos(player.pitch) * Math.cos(player.yaw)
+    ];
+
+    const view = M.look(
+      player.position,
+      M.add(player.position, direction),
+      [0, 1, 0]
+    );
+
+    const vp = M.mul(
+      M.perspective(
+        Math.PI / 3,
+        canvas.width / canvas.height,
+        0.05,
+        300
+      ),
+      view
+    );
+
+    gl.uniformMatrix4fv(U.vp, false, vp);
+    gl.uniform3fv(U.light, new Float32Array([8, 12, 5]));
+    gl.uniform3fv(U.camera, new Float32Array(player.position));
+
+    for (const entity of this.entities) {
+      if (!entity.visible) continue;
+
+      gl.uniformMatrix4fv(
+        U.model,
+        false,
+        M.trs(entity.position, entity.scale, entity.rotation)
+      );
+
+      gl.uniform3fv(U.color, new Float32Array(entity.color));
+      gl.bindVertexArray(CUBE.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, CUBE.count);
+    }
+  }
+}
 const engine=new Engine();
 engine.add(new Entity({position:[0,-.35,0],scale:[18,.35,18],color:[.16,.19,.18]}));
 for(let x=-15;x<=15;x+=3)for(let z=-15;z<=15;z+=3)if((x+z)%6===0)engine.add(new Entity({position:[x,.75,z],scale:[.65,.75,.65],color:[.28,.31,.34]}));
