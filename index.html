@@ -39,12 +39,51 @@ function cube(){let p=[[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1
 const CUBE=cube();
 class Entity{constructor(o={}){this.position=o.position||[0,0,0];this.scale=o.scale||[1,1,1];this.rotation=o.rotation||0;this.color=o.color||[1,1,1];this.visible=true}}
 class Engine{
-constructor(){this.entities=[];this.camera={position:[0,1.7,6],yaw:0,pitch:0,velocityY:0};this.keys=new Set();this.last=performance.now();this.frames=0}
+constructor(){this.entities=[];this.camera={position:[0,1.7,6],yaw:0,pitch:0,velocity:[0,0,0],onGround:true};this.keys=new Set();this.jumpQueued=false;this.last=performance.now();this.accumulator=0;this.frames=0;this.tick=0}
 add(e){this.entities.push(e);return e}
 start(){this.input();requestAnimationFrame(t=>this.loop(t))}
-input(){addEventListener("keydown",e=>{this.keys.add(e.code);if(e.code==="Space"&&this.camera.position[1]<=1.71)this.camera.velocityY=6.5});addEventListener("keyup",e=>this.keys.delete(e.code));canvas.addEventListener("click",()=>canvas.requestPointerLock());addEventListener("mousemove",e=>{if(document.pointerLockElement!==canvas)return;this.camera.yaw-=e.movementX*.0022;this.camera.pitch=Math.max(-1.5,Math.min(1.5,this.camera.pitch-e.movementY*.0022))})}
-loop(t){let dt=Math.min(.05,(t-this.last)/1000);this.last=t;this.update(dt);this.render();this.frames++;if(t-(this.ft||t)>1000){this.fps=this.frames;this.frames=0;this.ft=t;stats.textContent="WebGL2 · "+this.fps+" FPS · "+this.entities.length+" objects"}requestAnimationFrame(x=>this.loop(x))}
-update(dt){let c=this.camera,s=this.keys,f=[Math.sin(c.yaw),0,-Math.cos(c.yaw)],r=[Math.cos(c.yaw),0,Math.sin(c.yaw)],m=[0,0,0];if(s.has("KeyW"))m=M.add(m,f);if(s.has("KeyS"))m=M.sub(m,f);if(s.has("KeyD"))m=M.add(m,r);if(s.has("KeyA"))m=M.sub(m,r);if(Math.hypot(m[0],m[2])>0){m=M.norm(m);let speed=s.has("ShiftLeft")?7:4.2;c.position=M.add(c.position,M.scale(m,speed*dt))}c.velocityY-=18*dt;c.position[1]+=c.velocityY*dt;if(c.position[1]<1.7){c.position[1]=1.7;c.velocityY=0}}
+input(){
+addEventListener("keydown",e=>{if(e.code==="Space"){if(!e.repeat)this.jumpQueued=true;e.preventDefault()}this.keys.add(e.code)});
+addEventListener("keyup",e=>this.keys.delete(e.code));
+canvas.addEventListener("click",()=>canvas.requestPointerLock());
+addEventListener("mousemove",e=>{if(document.pointerLockElement!==canvas)return;this.camera.yaw+=e.movementX*.0022;this.camera.pitch=Math.max(-1.5,Math.min(1.5,this.camera.pitch+e.movementY*.0022))})
+}
+loop(t){
+let frameDt=Math.min(.1,(t-this.last)/1000);this.last=t;this.accumulator+=frameDt;
+const fixed=.01;
+while(this.accumulator>=fixed){this.update(fixed);this.accumulator-=fixed}
+this.render();this.frames++;
+if(t-(this.ft||t)>1000){this.fps=this.frames;this.frames=0;this.ft=t;let v=this.camera.velocity;stats.textContent="GoldSrc · "+this.fps+" FPS · "+Math.hypot(v[0],v[2]).toFixed(1)+" ups · "+(this.camera.onGround?"ground":"air")}
+requestAnimationFrame(x=>this.loop(x))
+}
+accelerate(wishDir,wishSpeed,accel,dt){
+let v=this.camera.velocity,current=v[0]*wishDir[0]+v[2]*wishDir[1],add=wishSpeed-current;
+if(add<=0)return;
+let amount=Math.min(accel*wishSpeed*dt,add);
+v[0]+=wishDir[0]*amount;v[2]+=wishDir[1]*amount;
+}
+friction(dt){
+let v=this.camera.velocity,speed=Math.hypot(v[0],v[2]);
+if(speed<0.0001)return;
+const control=Math.max(speed,100),drop=control*4*dt,newspeed=Math.max(speed-drop,0),scale=newspeed/speed;
+v[0]*=scale;v[2]*=scale;
+}
+update(dt){
+let c=this.camera,s=this.keys,f=[Math.sin(c.yaw),-Math.cos(c.yaw)],r=[Math.cos(c.yaw),Math.sin(c.yaw)],wish=[0,0];
+if(s.has("KeyW")){wish[0]+=f[0];wish[1]+=f[1]}if(s.has("KeyS")){wish[0]-=f[0];wish[1]-=f[1]}
+if(s.has("KeyD")){wish[0]+=r[0];wish[1]+=r[1]}if(s.has("KeyA")){wish[0]-=r[0];wish[1]-=r[1]}
+let len=Math.hypot(wish[0],wish[1]),wishSpeed=0;
+if(len>0){wish[0]/=len;wish[1]/=len;wishSpeed=320}
+if(c.onGround){
+if(this.jumpQueued){c.velocity[1]=270;c.onGround=false}else this.friction(dt);
+if(c.onGround&&wishSpeed>0)this.accelerate(wish,wishSpeed,10,dt);
+}else if(wishSpeed>0)this.accelerate(wish,Math.min(wishSpeed,30),10,dt);
+this.jumpQueued=false;
+c.velocity[1]-=800*dt;
+c.position[0]+=c.velocity[0]*dt;c.position[1]+=c.velocity[1]*dt;c.position[2]+=c.velocity[2]*dt;
+if(c.position[1]<=1.7){c.position[1]=1.7;if(c.velocity[1]<0)c.velocity[1]=0;c.onGround=true}else c.onGround=false;
+this.tick++;
+}
 render(){resize();gl.enable(gl.DEPTH_TEST);gl.clearColor(.035,.055,.075,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(P);let c=this.camera,d=[Math.cos(c.pitch)*Math.sin(c.yaw),Math.sin(c.pitch),-Math.cos(c.pitch)*Math.cos(c.yaw)],view=M.look(c.position,M.add(c.position,d),[0,1,0]),vp=M.mul(M.perspective(Math.PI/3,canvas.width/canvas.height,.05,300),view);gl.uniformMatrix4fv(U.vp,false,vp);gl.uniform3fv(U.light,new Float32Array([8,12,5]));gl.uniform3fv(U.camera,new Float32Array(c.position));for(let e of this.entities)if(e.visible){gl.uniformMatrix4fv(U.model,false,M.trs(e.position,e.scale,e.rotation));gl.uniform3fv(U.color,new Float32Array(e.color));gl.bindVertexArray(CUBE.vao);gl.drawArrays(gl.TRIANGLES,0,CUBE.count)}}}
 function resize(){let d=devicePixelRatio||1,w=Math.floor(innerWidth*d),h=Math.floor(innerHeight*d);if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h)}}
 const engine=new Engine();
